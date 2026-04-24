@@ -32,10 +32,14 @@ public class JwtFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        String path = request.getServletPath();
+        String path = request.getRequestURI(); // ✅ better than getServletPath()
 
-        // ✅ CRITICAL: Skip public endpoints completely
-        if (path.startsWith("/auth") || path.startsWith("/actuator") || path.equals("/")) {
+        // ✅ Skip ALL public endpoints
+        if (path.startsWith("/auth") ||
+            path.startsWith("/actuator") ||
+            path.startsWith("/error") ||   // VERY IMPORTANT (Spring internal)
+            path.equals("/")) {
+
             filterChain.doFilter(request, response);
             return;
         }
@@ -44,12 +48,13 @@ public class JwtFilter extends OncePerRequestFilter {
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
+
             try {
                 String userId = jwtUtil.extractSubject(token);
 
-                if (userId != null
-                        && SecurityContextHolder.getContext().getAuthentication() == null
-                        && userRepository.existsById(userId)) {
+                if (userId != null &&
+                    SecurityContextHolder.getContext().getAuthentication() == null &&
+                    userRepository.existsById(userId)) {
 
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(
@@ -63,12 +68,11 @@ public class JwtFilter extends OncePerRequestFilter {
                 }
 
             } catch (Exception e) {
-                // Invalid token → clear context but DO NOT block request
+                // ❌ DO NOT BLOCK → just clear context
                 SecurityContextHolder.clearContext();
             }
         }
 
-        // ✅ Always continue
         filterChain.doFilter(request, response);
     }
 }
