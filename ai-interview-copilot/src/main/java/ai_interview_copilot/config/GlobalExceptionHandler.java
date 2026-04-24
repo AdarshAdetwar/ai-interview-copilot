@@ -49,9 +49,18 @@ public class GlobalExceptionHandler {
 
     // Catch-all error handler
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Object>> handleGeneric(Exception ex) {
-        log.error("Unhandled exception", ex);
-        return ResponseEntity.status(500)
-                .body(ApiResponse.error("Internal server error"));
+public ResponseEntity<ApiResponse<Object>> handleGeneric(Exception ex,jakarta.servlet.http.HttpServletRequest request) {
+
+    String path = request.getRequestURI();
+
+    // ✅ Let actuator endpoints behave normally
+    if (path.startsWith("/actuator")) {
+        throw new RuntimeException(ex);
     }
+
+    log.error("Unhandled exception at {}: {}", path, ex.getMessage(), ex);
+
+    return ResponseEntity.status(500)
+            .body(ApiResponse.error("Internal server error"));
+}
 }
