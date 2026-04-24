@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import chromadb
 import uuid
-from sentence_transformers import SentenceTransformer
 
 app = FastAPI(title="AI Interview RAG Service")
 
@@ -11,15 +10,12 @@ app = FastAPI(title="AI Interview RAG Service")
 CHROMA_PERSIST_PATH = os.getenv("CHROMA_PERSIST_PATH", "./chroma_db")
 print(f"ChromaDB using path: {CHROMA_PERSIST_PATH}")
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
-
 chroma_client = chromadb.PersistentClient(path=CHROMA_PERSIST_PATH)
 
 # Session-scoped collections
 session_collections = {}
 
 def get_collection(session_id: str):
-    """Get or create a collection for the specific session"""
     if not session_id or str(session_id).strip() == "":
         session_id = "default"
     
@@ -30,6 +26,7 @@ def get_collection(session_id: str):
     return session_collections[session_id]
 
 
+# ================== REQUEST MODELS ==================
 class ResumeRequest(BaseModel):
     text: str
     session_id: str
@@ -40,15 +37,18 @@ class QueryRequest(BaseModel):
     session_id: str
 
 
+# ================== UTILS ==================
 def chunk_text(text, chunk_size=200):
     words = text.split()
-    chunks = []
-    for i in range(0, len(words), chunk_size):
-        chunk = " ".join(words[i:i + chunk_size])
-        chunks.append(chunk)
-    return chunks
+    return [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
 
 
+# 🔥 LIGHTWEIGHT EMBEDDING (REPLACEMENT)
+def fake_embedding(texts):
+    return [[float(len(t))] * 10 for t in texts]
+
+
+# ================== ROUTES ==================
 @app.post("/embed")
 def embed_resume(req: ResumeRequest):
     try:
@@ -56,7 +56,7 @@ def embed_resume(req: ResumeRequest):
             return {"error": "Empty resume text"}
 
         chunks = chunk_text(req.text)
-        embeddings = model.encode(chunks).tolist()
+        embeddings = fake_embedding(chunks)
 
         collection = get_collection(req.session_id)
         collection.add(
@@ -77,7 +77,7 @@ def query_resume(req: QueryRequest):
             return {"error": "Empty query"}
 
         collection = get_collection(req.session_id)
-        query_embedding = model.encode([req.query]).tolist()
+        query_embedding = fake_embedding([req.query])
         
         results = collection.query(
             query_embeddings=query_embedding,
@@ -100,7 +100,6 @@ def home():
     }
 
 
-# Optional but very useful for production
 @app.delete("/cleanup/{session_id}")
 def cleanup_session(session_id: str):
     try:
