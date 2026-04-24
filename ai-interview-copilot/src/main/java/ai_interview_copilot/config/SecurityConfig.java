@@ -16,7 +16,6 @@ import java.util.Arrays;
 @Configuration
 public class SecurityConfig {
 
-    // ✅ FIX: CORS origin from config — not hardcoded to localhost
     @Value("${app.cors.allowed-origins}")
     private String allowedOrigins;
 
@@ -29,17 +28,22 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/**").permitAll()
+                .requestMatchers(
+                        "/",                 // root
+                        "/auth/**",          // login/register
+                        "/actuator/**"       // health check (IMPORTANT)
+                ).permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
         return http.build();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // ✅ FIX: Uses injected value — supports comma-separated list for multi-origin
+
         configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With"));
@@ -47,6 +51,7 @@ public class SecurityConfig {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
+
         return source;
     }
 }
