@@ -30,24 +30,28 @@ public class SecurityConfig {
 
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
+            // 🔥 VERY IMPORTANT — disable default login
+            .formLogin(form -> form.disable())
+            .httpBasic(basic -> basic.disable())
+
             .authorizeHttpRequests(auth -> auth
 
-                // ✅ Allow preflight requests (VERY IMPORTANT for frontend)
+                // ✅ Allow preflight
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                 // ✅ Public endpoints
                 .requestMatchers(
-                        "/",                 // root
-                        "/auth/**",          // login/register
-                        "/actuator/**",      // health check
-                        "/test/**"           // test endpoint
+                        "/",
+                        "/auth/**",
+                        "/actuator/**",
+                        "/test/**",
+                        "/error"   // 🔥 CRITICAL FIX
                 ).permitAll()
 
                 // 🔒 Everything else requires JWT
                 .anyRequest().authenticated()
             )
 
-            // ✅ Add JWT filter
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -57,7 +61,6 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // ✅ Allow multiple origins (comma-separated)
         configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
 
         configuration.setAllowedMethods(Arrays.asList(
@@ -70,7 +73,6 @@ public class SecurityConfig {
 
         configuration.setAllowCredentials(true);
 
-        // Optional but useful
         configuration.setExposedHeaders(Arrays.asList("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
