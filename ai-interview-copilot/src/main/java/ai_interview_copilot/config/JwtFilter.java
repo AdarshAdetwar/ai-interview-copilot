@@ -5,6 +5,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -31,6 +32,14 @@ public class JwtFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
+        String path = request.getServletPath();
+
+        // ✅ CRITICAL: Skip public endpoints completely
+        if (path.startsWith("/auth") || path.startsWith("/actuator") || path.equals("/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
@@ -48,22 +57,18 @@ public class JwtFilter extends OncePerRequestFilter {
                                     null,
                                     List.of(new SimpleGrantedAuthority("ROLE_USER"))
                             );
+
                     auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(auth);
                 }
-                // BUG #2 FIX: Removed the else block that returned 401 here.
-                // If the token is present but invalid/expired, we simply don't set
-                // authentication and let Spring Security's authorization rules handle it.
-                // This prevents public routes from receiving an unexpected 401.
 
             } catch (Exception e) {
-                // Token is malformed — clear any partial auth, then fall through.
-                // Spring Security will enforce route-level authorization downstream.
+                // Invalid token → clear context but DO NOT block request
                 SecurityContextHolder.clearContext();
             }
         }
 
-        // Always continue the filter chain — Spring Security decides authorization.
+        // ✅ Always continue
         filterChain.doFilter(request, response);
     }
 }
